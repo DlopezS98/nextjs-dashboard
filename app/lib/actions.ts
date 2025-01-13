@@ -7,16 +7,30 @@ import { redirect } from "next/navigation";
 
 const FormSchema = z.object({
 	id: z.string(),
-	customerId: z.string(),
-	amount: z.coerce.number(),
-	status: z.enum(["pending", "paid"]),
+	customerId: z.string({ message: "Please select a customer." }),
+	amount: z.coerce
+		.number()
+		.gt(0, { message: "Please enter an amount greater than $0." }),
+	status: z.enum(["pending", "paid"], {
+		message: "Please select an invoice status.",
+	}),
 	date: z.string(),
 });
 
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 const UpdateInvoice = FormSchema.omit({ id: true, date: true });
 
-export async function createInvoice(formData: FormData) {
+export type State = {
+	errors?: {
+		customerId?: string[];
+		amount?: string[];
+		status?: string[];
+	};
+	message?: string | null;
+};
+
+// prev state, form data
+export async function createInvoice(_: State, formData: FormData) {
 	// const rawFormData = {
 	// 	customerId: formData.get("customerId"),
 	// 	amount: formData.get("amount"),
@@ -25,14 +39,23 @@ export async function createInvoice(formData: FormData) {
 
 	try {
 		const rawFormData = Object.fromEntries(formData.entries());
-		const validatedData = CreateInvoice.parse(rawFormData);
+		const validatedData = CreateInvoice.safeParse(rawFormData);
 
-		const amountInCents = validatedData.amount * 100;
+		if (!validatedData.success) {
+			console.log(validatedData.error.flatten());
+			return {
+				errors: validatedData.error.flatten().fieldErrors,
+				message: "Missing fields. Failed to create invoice",
+			};
+		}
+
+		const { amount, customerId, status } = validatedData.data;
+		const amountInCents = amount * 100;
 		const date = new Date().toISOString().split("T")[0];
 
 		await sql`
         	INSERT INTO invoices (customer_id, amount, status, date)
-        	VALUES (${validatedData.customerId}, ${amountInCents}, ${validatedData.status}, ${date})
+        	VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
     	`;
 	} catch (error) {
 		return { message: "Database Error: Failed to Create Invoice." };
