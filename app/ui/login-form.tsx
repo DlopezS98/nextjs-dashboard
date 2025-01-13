@@ -1,15 +1,57 @@
+'use client';
+
+import * as React from 'react';
 import { lusitana } from '@/app/ui/fonts';
 import {
   AtSymbolIcon,
   KeyIcon,
-  ExclamationCircleIcon,
+  // ExclamationCircleIcon,
 } from '@heroicons/react/24/outline';
 import { ArrowRightIcon } from '@heroicons/react/20/solid';
 import { Button } from './button';
+import { useSignIn } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
+import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 
 export default function LoginForm() {
+  const { isLoaded, signIn, setActive } = useSignIn();
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!isLoaded) return;
+
+    try {
+      const signInAttempt = await signIn.create({
+        identifier: email,
+        password,
+      });
+
+      if (signInAttempt.status === 'complete') {
+        await setActive({ session: signInAttempt.createdSessionId });
+        router.push('/dashboard');
+      } else {
+        console.log(JSON.stringify(signInAttempt, null, 2));
+      }
+    } catch (err: any) {
+      // See https://clerk.com/docs/custom-flows/error-handling
+      // for more info on error handling
+      if (isClerkAPIResponseError(err)) {
+        // Do something with the error
+        console.log('is clerk api response error');
+      }
+
+      console.log(JSON.stringify(err), null, 2);
+    }
+  }
+
+
+
   return (
-    <form className="space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-3">
       <div className="flex-1 rounded-lg bg-gray-50 px-6 pb-4 pt-8">
         <h1 className={`${lusitana.className} mb-3 text-2xl`}>
           Please log in to continue.
@@ -30,6 +72,7 @@ export default function LoginForm() {
                 name="email"
                 placeholder="Enter your email address"
                 required
+                onChange={(e) => setEmail(e.target.value)}
               />
               <AtSymbolIcon className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gray-500 peer-focus:text-gray-900" />
             </div>
@@ -50,6 +93,7 @@ export default function LoginForm() {
                 placeholder="Enter password"
                 required
                 minLength={6}
+                onChange={(e) => setPassword(e.target.value)}
               />
               <KeyIcon className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gray-500 peer-focus:text-gray-900" />
             </div>
